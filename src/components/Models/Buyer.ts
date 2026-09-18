@@ -1,18 +1,19 @@
-import { TPayment } from "../../types";
-import { IBuyer } from "../../types"; 
-import { FormErrors } from "../../types";
+import { IBuyer, TPayment, FormErrors } from '../../types';
+import { IEvents } from '../base/Events';
 
 export class Buyer {
   protected payment: TPayment | '';
   protected email: string;
   protected phone: string;
   protected address: string;
+  protected events: IEvents;
 
-  constructor () {
+  constructor(events: IEvents) {
     this.payment = '';
     this.email = '';
     this.phone = '';
     this.address = '';
+    this.events = events;
   }
 
   setData(data: Partial<IBuyer>): void {
@@ -20,23 +21,25 @@ export class Buyer {
     this.email = data.email ?? this.email;
     this.phone = data.phone ?? this.phone;
     this.address = data.address ?? this.address;
-  };
+    this.events.emit('buyer:changed');
+  }
 
   getData(): IBuyer {
     return {
       payment: this.payment as TPayment,
       email: this.email,
       phone: this.phone,
-      address: this.address
-    }
-  };
+      address: this.address,
+    };
+  }
 
   clear(): void {
     this.payment = '';
     this.email = '';
     this.phone = '';
     this.address = '';
-  };
+    this.events.emit('buyer:changed');
+  }
 
   validate(): FormErrors {
     const errors: FormErrors = {};
@@ -55,6 +58,5 @@ export class Buyer {
     }
 
     return errors;
-};
-
+  }
 }
