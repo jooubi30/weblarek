@@ -13,7 +13,7 @@ export class Success extends Component<{ total: number }> {
     this.descriptionElement = container.querySelector('.order-success__description') as HTMLElement;
 
     this.closeButton.addEventListener('click', () => {
-      this.events.emit('modal:close');
+      this.events.emit('success:close');
     });
   }
 

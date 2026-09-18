@@ -30,6 +30,14 @@ export abstract class Form<T extends IFormData> extends Component<T> {
     });
   }
 
+  protected setInputValue(name: string, value: string): void {
+    const form = this.container as HTMLFormElement;
+    const input = form.elements.namedItem(name) as HTMLInputElement | null;
+    if (input) {
+      input.value = value;
+    }
+  }
+
   set valid(value: boolean) {
     this.submitButton.disabled = !value;
   }

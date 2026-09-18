@@ -4,6 +4,7 @@ import { TPayment } from '../../types';
 
 export interface IOrderFormData extends IFormData {
   payment: TPayment | '';
+  address: string;
 }
 
 export class Order extends Form<IOrderFormData> {
@@ -27,5 +28,9 @@ export class Order extends Form<IOrderFormData> {
   set payment(value: TPayment | '') {
     this.cardButton.classList.toggle('button_alt-active', value === 'card');
     this.cashButton.classList.toggle('button_alt-active', value === 'cash');
+  }
+
+  set address(value: string) {
+    this.setInputValue('address', value);
   }
 }

@@ -1,5 +1,4 @@
 import { Card, ICardData } from './Card';
-import { IEvents } from '../base/Events';
 import { categoryMap, CDN_URL } from '../../utils/constants';
 
 export interface IPreviewCardData extends ICardData {
@@ -16,16 +15,13 @@ export class PreviewCard extends Card<IPreviewCardData> {
   protected descriptionElement: HTMLElement;
   protected buttonElement: HTMLButtonElement;
 
-  constructor(container: HTMLElement, events: IEvents) {
-    super(container, events);
+  constructor(container: HTMLElement, onClick: () => void) {
+    super(container);
     this.imageElement = container.querySelector('.card__image') as HTMLImageElement;
     this.categoryElement = container.querySelector('.card__category') as HTMLElement;
     this.descriptionElement = container.querySelector('.card__text') as HTMLElement;
     this.buttonElement = container.querySelector('.card__button') as HTMLButtonElement;
-
-    this.buttonElement.addEventListener('click', () => {
-      this.events.emit('card:toggleBasket', { id: this.cardId });
-    });
+    this.buttonElement.addEventListener('click', onClick);
   }
 
   set image(value: string) {
@@ -36,9 +32,7 @@ export class PreviewCard extends Card<IPreviewCardData> {
     this.categoryElement.textContent = value;
     this.categoryElement.className = 'card__category';
     const modifier = categoryMap[value as keyof typeof categoryMap];
-    if (modifier) {
-      this.categoryElement.classList.add(modifier);
-    }
+    if (modifier) this.categoryElement.classList.add(modifier);
   }
 
   set description(value: string) {

@@ -19,6 +19,7 @@ import { Success } from './components/View/Success';
 import { Order } from './components/View/Order';
 import { Contacts } from './components/View/Contacts';
 
+import { cloneTemplate } from './utils/utils';
 import { API_URL } from './utils/constants';
 import { IProduct, IOrder, TPayment } from './types';
 
@@ -31,15 +32,6 @@ const buyer = new Buyer(events);
 const api = new Api(API_URL);
 const productsApi = new ProductsApi(api);
 
-const galleryContainer = document.querySelector('.gallery') as HTMLElement;
-const gallery = new Gallery(galleryContainer);
-
-const headerContainer = document.querySelector('.header') as HTMLElement;
-const header = new Header(headerContainer, events);
-
-const modalContainer = document.querySelector('#modal-container') as HTMLElement;
-const modal = new Modal(modalContainer, events);
-
 const cardCatalogTemplate = document.querySelector('#card-catalog') as HTMLTemplateElement;
 const cardPreviewTemplate = document.querySelector('#card-preview') as HTMLTemplateElement;
 const cardBasketTemplate = document.querySelector('#card-basket') as HTMLTemplateElement;
@@ -48,10 +40,23 @@ const orderTemplate = document.querySelector('#order') as HTMLTemplateElement;
 const contactsTemplate = document.querySelector('#contacts') as HTMLTemplateElement;
 const successTemplate = document.querySelector('#success') as HTMLTemplateElement;
 
-let currentPreviewCard: PreviewCard | null = null;
-let currentOrderForm: Order | null = null;
-let currentContactsForm: Contacts | null = null;
-let isBasketOpen = false;
+const galleryContainer = document.querySelector('.gallery') as HTMLElement;
+const gallery = new Gallery(galleryContainer);
+
+const headerContainer = document.querySelector('.header') as HTMLElement;
+const header = new Header(headerContainer, events);
+
+const modalContainer = document.querySelector('#modal-container') as HTMLElement;
+const modal = new Modal(modalContainer);
+
+const previewCard = new PreviewCard(cloneTemplate<HTMLElement>(cardPreviewTemplate), () => {
+  events.emit('card:toggleBasket');
+});
+
+const basketView = new BasketView(cloneTemplate<HTMLElement>(basketTemplate), events);
+const orderForm = new Order(cloneTemplate<HTMLFormElement>(orderTemplate), events);
+const contactsForm = new Contacts(cloneTemplate<HTMLFormElement>(contactsTemplate), events);
+const success = new Success(cloneTemplate<HTMLElement>(successTemplate), events);
 
 function getPreviewButtonState(item: IProduct): { buttonText: string; buttonDisabled: boolean } {
   if (item.price === null) {
@@ -63,90 +68,82 @@ function getPreviewButtonState(item: IProduct): { buttonText: string; buttonDisa
   };
 }
 
-function getOrderFormState() {
-  const data = buyer.getData();
-  const errors = buyer.validate();
-  const orderErrors = [errors.payment, errors.address].filter(Boolean);
-  return {
-    payment: data.payment,
-    valid: orderErrors.length === 0,
-    errors: orderErrors.join('. '),
-  };
-}
-
-function getContactsFormState() {
-  const errors = buyer.validate();
-  const contactsErrors = [errors.email, errors.phone].filter(Boolean);
-  return {
-    valid: contactsErrors.length === 0,
-    errors: contactsErrors.join('. '),
-  };
-}
-
 function renderCatalog(): void {
   const cardElements = catalog.getItems().map((item) => {
-    const cardContainer = cardCatalogTemplate.content.cloneNode(true) as HTMLElement;
-    const cardButton = cardContainer.querySelector('.card') as HTMLElement;
-    const card = new CatalogCard(cardButton, events);
-    return card.render(item);
+    const cardElement = cloneTemplate<HTMLElement>(cardCatalogTemplate);
+    const card = new CatalogCard(cardElement, () => events.emit('card:select', { id: item.id }));
+    return card.render({
+      title: item.title,
+      price: item.price,
+      image: item.image,
+      category: item.category,
+    });
   });
   gallery.render({ items: cardElements });
 }
 
-function renderBasketView(): HTMLElement {
-  const basketContainer = basketTemplate.content.cloneNode(true) as HTMLElement;
-  const basketRoot = basketContainer.querySelector('.basket') as HTMLElement;
-  const basketView = new BasketView(basketRoot, events);
-
+function renderBasketItems(): void {
   const itemElements = basket.getItems().map((item, index) => {
-    const cardContainer = cardBasketTemplate.content.cloneNode(true) as HTMLElement;
-    const cardRoot = cardContainer.querySelector('.basket__item') as HTMLElement;
-    const card = new BasketCard(cardRoot, events);
-    return card.render({ ...item, index: index + 1 });
+    const cardElement = cloneTemplate<HTMLElement>(cardBasketTemplate);
+    const card = new BasketCard(cardElement, () => events.emit('basket:remove', { id: item.id }));
+    return card.render({
+      title: item.title,
+      price: item.price,
+      index: index + 1,
+    });
   });
-
-  return basketView.render({ items: itemElements, total: basket.getTotal() });
+  basketView.render({ items: itemElements, total: basket.getTotal() });
 }
 
-events.on('catalog:changed', () => {
-  renderCatalog();
-});
+function renderBuyerForms(): void {
+  const data = buyer.getData();
+  const errors = buyer.validate();
+
+  orderForm.render({
+    payment: data.payment,
+    address: data.address,
+    valid: !errors.payment && !errors.address,
+    errors: [errors.payment, errors.address].filter(Boolean).join('. '),
+  });
+
+  contactsForm.render({
+    email: data.email,
+    phone: data.phone,
+    valid: !errors.email && !errors.phone,
+    errors: [errors.email, errors.phone].filter(Boolean).join('. '),
+  });
+}
+
+events.on('catalog:changed', renderCatalog);
 
 events.on('catalog:selectedItemChanged', () => {
   const item = catalog.getSelectedItem();
   if (!item) return;
 
-  const previewContainer = cardPreviewTemplate.content.cloneNode(true) as HTMLElement;
-  const previewRoot = previewContainer.querySelector('.card') as HTMLElement;
-  currentPreviewCard = new PreviewCard(previewRoot, events);
-
   modal.render({
-    content: currentPreviewCard.render({ ...item, ...getPreviewButtonState(item) }),
+    content: previewCard.render({
+      title: item.title,
+      price: item.price,
+      image: item.image,
+      category: item.category,
+      description: item.description,
+      ...getPreviewButtonState(item),
+    }),
   });
   modal.open();
 });
 
 events.on('basket:changed', () => {
   header.render({ counter: basket.getCount() });
+  renderBasketItems();
 
   const selected = catalog.getSelectedItem();
-  if (currentPreviewCard && selected) {
-    currentPreviewCard.render(getPreviewButtonState(selected));
-  }
-
-  if (isBasketOpen) {
-    modal.render({ content: renderBasketView() });
+  if (selected) {
+    previewCard.render(getPreviewButtonState(selected));
   }
 });
 
-events.on('buyer:changed', () => {
-  if (currentOrderForm) {
-    currentOrderForm.render(getOrderFormState());
-  }
-  if (currentContactsForm) {
-    currentContactsForm.render(getContactsFormState());
-  }
-});
+events.on('buyer:changed', renderBuyerForms);
 
 events.on<{ id: string }>('card:select', ({ id }) => {
   const item = catalog.getItem(id);
@@ -155,12 +152,12 @@ events.on<{ id: string }>('card:select', ({ id }) => {
   }
 });
 
-events.on<{ id: string }>('card:toggleBasket', ({ id }) => {
-  const item = catalog.getItem(id);
+events.on('card:toggleBasket', () => {
+  const item = catalog.getSelectedItem();
   if (!item) return;
 
-  if (basket.hasItem(id)) {
-    basket.removeItem(id);
+  if (basket.hasItem(item.id)) {
+    basket.removeItem(item.id);
   } else {
     basket.addItem(item);
   }
@@ -171,17 +168,12 @@ events.on<{ id: string }>('basket:remove', ({ id }) => {
 });
 
 events.on('basket:open', () => {
-  isBasketOpen = true;
-  modal.render({ content: renderBasketView() });
+  modal.render({ content: basketView.render() });
   modal.open();
 });
 
 events.on('order:open', () => {
-  const orderContainer = orderTemplate.content.cloneNode(true) as HTMLElement;
-  const orderRoot = orderContainer.querySelector('form') as HTMLFormElement;
-  currentOrderForm = new Order(orderRoot, events);
-
-  modal.render({ content: currentOrderForm.render(getOrderFormState()) });
+  modal.render({ content: orderForm.render() });
   modal.open();
 });
 
@@ -194,13 +186,7 @@ events.on<{ value: string }>('order.address:change', ({ value }) => {
 });
 
 events.on('order:submit', () => {
-  currentOrderForm = null;
-
-  const contactsContainer = contactsTemplate.content.cloneNode(true) as HTMLElement;
-  const contactsRoot = contactsContainer.querySelector('form') as HTMLFormElement;
-  currentContactsForm = new Contacts(contactsRoot, events);
-
-  modal.render({ content: currentContactsForm.render(getContactsFormState()) });
+  modal.render({ content: contactsForm.render() });
   modal.open();
 });
 
@@ -221,12 +207,6 @@ events.on('contacts:submit', () => {
 
   productsApi.postOrder(order)
     .then((result) => {
-      currentContactsForm = null;
-
-      const successContainer = successTemplate.content.cloneNode(true) as HTMLElement;
-      const successRoot = successContainer.querySelector('.order-success') as HTMLElement;
-      const success = new Success(successRoot, events);
-
       modal.render({ content: success.render({ total: result.total }) });
       modal.open();
 
@@ -238,13 +218,12 @@ events.on('contacts:submit', () => {
     });
 });
 
-events.on('modal:close', () => {
+events.on('success:close', () => {
   modal.close();
-  currentPreviewCard = null;
-  currentOrderForm = null;
-  currentContactsForm = null;
-  isBasketOpen = false;
 });
+
+renderBasketItems();
+renderBuyerForms();
 
 productsApi.getProducts()
   .then((response) => {
